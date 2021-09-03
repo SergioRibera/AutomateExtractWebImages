@@ -1,10 +1,11 @@
 #!env/python3
-
+from fpdf import FPDF
 import requests, os, sys
 from tqdm import tqdm
 from bs4 import BeautifulSoup as bs
 from urllib.parse import urljoin, urlparse
 
+imageFiles = []
 
 # Debugs
 def print_fail(message, end = '\n'):
@@ -57,6 +58,7 @@ def download(url, pathname, enable_enumeration, index, cookies):
     filename = os.path.join(pathname, url.split("/")[-1])
     if enable_enumeration == True:
         filename = os.path.join(pathname, str(index) + "." + url.split(".")[-1])
+    imageFiles.append(filename)
     # progress bar, changing the unit to bytes instead of iteration (default by tqdm)
     progress = tqdm(response.iter_content(1024), f"Downloading {filename}", total=file_size, unit="B", unit_scale=True, unit_divisor=1024)
     with open(filename, "wb") as f:
@@ -70,12 +72,13 @@ def help():
     print("----------- Help Guide --------------")
     print("\n python ./main.py [OPTIONS]")
     print("\n\nOptions:")
-    print("\tOPTION                 NECESARY         DESCRIPTION")
-    print("\t--url <url>               *             This is the url where download all images")
-    print("\t--path <path>             *             This is the directory where download all images")
-    print("\t--cookies <cookies>                     Cookies of session to access into web")
-    print("\t--pdf                                   Enable generate PDF from all images downloaded")
-    print("\t--no-enumerate                          Disable enumeration images from 0..n")
+    print("\tOPTION                              NECESARY         DESCRIPTION")
+    print("\t--url <url>                            *             This is the url where download all images")
+    print("\t--path <path>                          *             This is the directory where download all images")
+    print("\t--cookies <cookies>                                  Cookies of session to access into web")
+    print("\t--pdf-geometry <x,y,width,height>                    Define the size (in mm) and position of the images on page")
+    print("\t--output-pdf <name>                                  Enable generate PDF from all images downloaded")
+    print("\t--no-enumerate                                       Disable enumeration images from 0..n")
     # print("\t--ignore [name name ...]   List of images names to ignore on download (Regex are valid)\n\n")
     pass
 
@@ -107,10 +110,11 @@ if __name__ == "__main__":
         if not stop:
             url = process_args(args, "url", "str")
             path = process_args(args, "path", "str")
-            cookies = process_args(args, "cookies", "str")
-            enable_pdf = process_args(args, "pdf", "bool", defaultValue=False)
+            cookies_args = process_args(args, "cookies", "str")
+            pdf_output = process_args(args, "output-pdf", "str")
             enable_enumerate = not process_args(args, "no-enumerate", "bool", defaultValue=False)
-            ignore_list = []
+            pdf_geometry = process_args(args, "pdf-geometry", "str", defaultValue="0,0,216,273")
+            cookies = dict((x.strip(), y.strip()) for x, y in (element.split('=') for element in cookies_args.split('; ')))
             if not url == "":
                 if not path == "":
                     imgs = get_all_images(url, cookies)
@@ -119,8 +123,17 @@ if __name__ == "__main__":
                         # for each image, download it
                         download(img, path, enable_enumerate, i, cookies)
                         i = i + 1
-                    if enable_pdf == True:
-                        pass
+                    if not pdf_output == "":
+                        if len(imageFiles) > 0:
+                            pdf = FPDF()
+                            pdf_geometry_split = pdf_geometry.split(",")
+                            if len(pdf_geometry_split) < 4:
+                                print_fail("The value of \"--pdf-geometry\" is incorrect")
+                            # imagelist is the list with all image filenames
+                            for image in imageFiles:
+                                pdf.add_page()
+                                pdf.image(image, pdf_geometry_split[0], pdf_geometry_split[1], pdf_geometry_split[2], pdf_geometry_split[3])
+                            pdf.output(pdf_output, "F")
                 else:
                     print_fail("Path is empty")
             else:
