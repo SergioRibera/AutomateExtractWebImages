@@ -4,6 +4,7 @@ import requests, os, sys
 from tqdm import tqdm
 from bs4 import BeautifulSoup as bs
 from urllib.parse import urljoin, urlparse
+from time import sleep
 
 imageFiles = []
 
@@ -12,6 +13,9 @@ def print_fail(message, end = '\n'):
     print('\n[\x1b[1;31m x\x1b[0m ] \x1b[1;31m' + message.strip() + '\x1b[0m' + end)
     help()
     quit(2)
+
+def print_success(message, end = '\n'):
+    print('\n[\x1b[1;32m x\x1b[0m ] \x1b[1;32m' + message.strip() + '\x1b[0m' + end)
 
 def is_valid(url):
     """
@@ -56,8 +60,9 @@ def download(url, pathname, enable_enumeration, index, cookies):
     file_size = int(response.headers.get("Content-Length", 0))
     # get the file name
     filename = os.path.join(pathname, url.split("/")[-1])
+    filextension = response.headers.get("Content-Type", "png").split("/")[1]
     if enable_enumeration == True:
-        filename = os.path.join(pathname, str(index) + "." + url.split(".")[-1])
+        filename = os.path.join(pathname, str(index) + "." + filextension)
     imageFiles.append(filename)
     # progress bar, changing the unit to bytes instead of iteration (default by tqdm)
     progress = tqdm(response.iter_content(1024), f"Downloading {filename}", total=file_size, unit="B", unit_scale=True, unit_divisor=1024)
@@ -114,7 +119,9 @@ if __name__ == "__main__":
             pdf_output = process_args(args, "output-pdf", "str")
             enable_enumerate = not process_args(args, "no-enumerate", "bool", defaultValue=False)
             pdf_geometry = process_args(args, "pdf-geometry", "str", defaultValue="0,0,216,273")
-            cookies = dict((x.strip(), y.strip()) for x, y in (element.split('=') for element in cookies_args.split('; ')))
+            cookies = dict()
+            if not cookies_args == "":
+                cookies = dict((x.strip(), y.strip()) for x, y in (element.split('=') for element in cookies_args.split('; ')))
             if not url == "":
                 if not path == "":
                     imgs = get_all_images(url, cookies)
@@ -130,10 +137,12 @@ if __name__ == "__main__":
                             if len(pdf_geometry_split) < 4:
                                 print_fail("The value of \"--pdf-geometry\" is incorrect")
                             # imagelist is the list with all image filenames
-                            for image in imageFiles:
+                            for image in tqdm(imageFiles, f"Generating PDF \"{pdf_output}\""):
                                 pdf.add_page()
-                                pdf.image(image, pdf_geometry_split[0], pdf_geometry_split[1], pdf_geometry_split[2], pdf_geometry_split[3])
+                                pdf.image(image, float(pdf_geometry_split[0]), float(pdf_geometry_split[1]), float(pdf_geometry_split[2]), float(pdf_geometry_split[3]))
+                                sleep(0.2)
                             pdf.output(pdf_output, "F")
+                            print_success(f"PDF \"{pdf_output}\" success generated")
                 else:
                     print_fail("Path is empty")
             else:
